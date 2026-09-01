@@ -5,6 +5,7 @@ import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 import jwt
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -95,11 +96,17 @@ async def exchange_opc_entry_token(
     form_submission = request.headers.get("content-type", "").startswith(
         "application/x-www-form-urlencoded"
     )
-    if form_submission:
-        form = await request.form()
-        body = OPCEntryTokenRequest(token=str(form.get("token") or ""))
-    else:
-        body = OPCEntryTokenRequest.model_validate(await request.json())
+    try:
+        if form_submission:
+            form = await request.form()
+            body = OPCEntryTokenRequest(token=str(form.get("token") or ""))
+        else:
+            body = OPCEntryTokenRequest.model_validate(await request.json())
+    except (ValueError, ValidationError) as error:
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid OPC entry token request",
+        ) from error
     secret = (os.getenv("PRESENTON_OPC_AUTH_SECRET") or "").strip()
     if not secret:
         raise HTTPException(status_code=503, detail="OPC entry authentication is not configured")
