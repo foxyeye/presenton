@@ -21,21 +21,12 @@ from llmai.shared import (
 )
 
 from utils.llm_config import get_extra_body
-from utils.get_env import get_custom_llm_url_env
-from utils.llm_provider import is_custom_llm_selected
 from utils.schema_utils import get_schema_validation_errors
 
 LOGGER = logging.getLogger(__name__)
 CLIENT_DISCONNECT_POLL_SECONDS = 0.1
 DisconnectChecker = Callable[[], Awaitable[bool]]
 TextChunkCallback = Callable[[str], Awaitable[None]]
-
-
-def _custom_deepseek_disables_response_format() -> bool:
-    """Whether the custom endpoint rejects Presenton's JSON Schema format."""
-    if not is_custom_llm_selected():
-        return False
-    return "deepseek.com" in (get_custom_llm_url_env() or "").lower()
 
 
 @dataclass(frozen=True)
@@ -134,19 +125,12 @@ def get_generate_kwargs(
         kwargs["max_tokens"] = max_tokens
     if tools:
         kwargs["tools"] = tools
-    response_format_enabled = (
-        response_format is not None and not _custom_deepseek_disables_response_format()
-    )
-    if response_format_enabled:
+    if response_format is not None:
         kwargs["response_format"] = response_format
-    elif response_format is not None:
-        LOGGER.info(
-            "Skipping response_format for DeepSeek custom endpoint; using prompt-guided JSON instead."
-        )
     if reasoning is not None:
         kwargs["reasoning"] = reasoning
 
-    extra_body = get_extra_body(uses_tool_choice=bool(tools or response_format_enabled))
+    extra_body = get_extra_body(uses_tool_choice=bool(tools or response_format))
     if extra_body:
         kwargs["extra_body"] = extra_body
 
