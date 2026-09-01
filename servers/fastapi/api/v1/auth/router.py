@@ -1,12 +1,16 @@
+import hashlib
 import ipaddress
+import os
+import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+import jwt
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, RedirectResponse
 
-from api.v1.auth.schemas import AuthCredentialsRequest, LoginCredentialsRequest
+from api.v1.auth.schemas import AuthCredentialsRequest, LoginCredentialsRequest, OPCEntryTokenRequest
 from api.v1.auth.assets import is_app_data_path_authorized
 from api.v1.auth.rate_limit import LOGIN_RATE_LIMITER, login_rate_limit_key
 from api.v1.auth.principal import resolve_request_principal
@@ -76,6 +80,63 @@ def _set_login_cookie(response: JSONResponse, token: str, request: Request) -> N
         samesite="lax",
         path="/",
     )
+
+
+def _opc_username(subject: str) -> str:
+    return "opc-" + hashlib.sha256(subject.encode("utf-8")).hexdigest()
+
+
+@API_V1_AUTH_ROUTER.post("/opc/exchange")
+async def exchange_opc_entry_token(
+    request: Request,
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Exchange an OPC-issued 60-second JWT for a Presenton cookie session."""
+    form_submission = request.headers.get("content-type", "").startswith(
+        "application/x-www-form-urlencoded"
+    )
+    if form_submission:
+        form = await request.form()
+        body = OPCEntryTokenRequest(token=str(form.get("token") or ""))
+    else:
+        body = OPCEntryTokenRequest.model_validate(await request.json())
+    secret = (os.getenv("PRESENTON_OPC_AUTH_SECRET") or "").strip()
+    if not secret:
+        raise HTTPException(status_code=503, detail="OPC entry authentication is not configured")
+    try:
+        claims = jwt.decode(body.token, secret, algorithms=["HS256"], audience="opc-presenton")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired OPC entry token")
+    subject = claims.get("sub")
+    role = claims.get("role")
+    project_id = claims.get("project_id")
+    presentation_id = claims.get("presentation_id")
+    if not all(isinstance(value, str) and value.strip() for value in (subject, role, project_id, presentation_id)):
+        raise HTTPException(status_code=401, detail="Invalid OPC entry token claims")
+    if role not in {"owner", "editor", "viewer"}:
+        raise HTTPException(status_code=401, detail="Invalid OPC project role")
+
+    username = _opc_username(subject)
+    user = await session.scalar(select(User).where(User.username == username))
+    if user is None:
+        user = User(
+            username=username,
+            hashed_password=PASSWORD_HELPER.hash(secrets.token_urlsafe(32)),
+            is_active=True,
+            is_verified=True,
+            is_superuser=False,
+            auth_version=1,
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+    elif not user.is_active:
+        raise HTTPException(status_code=403, detail="Presenton account is disabled")
+
+    token = await get_jwt_strategy().write_token(user)
+    response = RedirectResponse(url="/", status_code=303) if form_submission else JSONResponse({"authenticated": True, **serialize_user(user)})
+    _set_login_cookie(response, token, request)
+    return response
 
 
 @API_V1_AUTH_ROUTER.get("/status")

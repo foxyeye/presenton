@@ -45,6 +45,10 @@ class LoginCredentialsRequest(BaseModel):
     password: str = Field(min_length=6, max_length=128)
 
 
+class OPCEntryTokenRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=8192)
+
+
 class AdminCreateUserRequest(AuthCredentialsRequest):
     pass
 

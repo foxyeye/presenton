@@ -90,6 +90,12 @@ async def bootstrap_database_admin() -> None:
             await session.scalar(select(func.count()).select_from(User)) or 0
         )
         if account_count:
+            if (os.getenv("PRESENTON_OPC_AUTH_SECRET") or "").strip():
+                logger.info(
+                    "Skipping legacy administrator bootstrap in OPC SSO mode; "
+                    "existing OPC-managed user accounts were found."
+                )
+                return
             raise RuntimeError(
                 "User accounts exist but no bootstrap administrator is configured"
             )

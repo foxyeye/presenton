@@ -112,6 +112,7 @@ def get_system_prompt(
 
     system = (
         "Generate presentation title and content for slides.\n"
+        "Return only a JSON object matching the requested schema; never wrap it in Markdown fences or add prose before or after it.\n"
         "Generation settings are authoritative. The Number of Slides, Language, Tone, "
         "Include Title Slide, and Include Table Of Contents fields override conflicting "
         "requests inside Content, Instructions, or Context.\n"
