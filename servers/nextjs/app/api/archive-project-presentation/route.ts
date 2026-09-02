@@ -20,8 +20,9 @@ export async function POST(req: NextRequest) {
     if (!(await bundledExportPackageAvailable())) throw new Error("presentation-export runtime is not available");
     const result = await runBundledPresentationExport({ format: "pptx", presentationId: body.id.trim(), title: typeof body.title === "string" ? body.title : undefined, cookieHeader: req.headers.get("cookie") ?? "" });
     const data = await fs.readFile(result.path);
+    const bytes = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
     const form = new FormData();
-    form.append("file", new Blob([data], { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" }), path.basename(result.path));
+    form.append("file", new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" }), path.basename(result.path));
     const response = await fetch(`${apiURL.replace(/\/$/, "")}/api/v1/integrations/presenton/project-export`, { method: "POST", headers: { Authorization: `Bearer ${contextToken}` }, body: form });
     if (!response.ok) throw new Error(`OPC archive service returned ${response.status}`);
     return NextResponse.json({ success: true, ...(await response.json()) });
