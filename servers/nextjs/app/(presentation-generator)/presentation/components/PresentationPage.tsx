@@ -143,6 +143,14 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   presentation_id,
 }) => {
   const pathname = usePathname();
+
+  useEffect(() => {
+    void fetch("/api/bind-opc-project-presentation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ presentonId: presentation_id }),
+    });
+  }, [presentation_id]);
   const searchParams = useSearchParams();
   const dispatch = useDispatch();
   // State management

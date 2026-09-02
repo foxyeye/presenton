@@ -160,7 +160,10 @@ async def exchange_opc_entry_token(
         raise HTTPException(status_code=403, detail="Presenton account is disabled")
 
     token = await get_jwt_strategy().write_token(user)
-    response = RedirectResponse(url="/", status_code=303) if form_submission else JSONResponse({"authenticated": True, **serialize_user(user)})
+    return_to = request.query_params.get("return_to", "")
+    if not (return_to.startswith("/presentation?id=") and "//" not in return_to and "&" not in return_to):
+        return_to = "/"
+    response = RedirectResponse(url=return_to, status_code=303) if form_submission else JSONResponse({"authenticated": True, **serialize_user(user)})
     _set_login_cookie(response, token, request)
     # Keep the OPC project context server-readable for the export flow.  The
     # original entry token lives only 60 seconds; this is a separately scoped
