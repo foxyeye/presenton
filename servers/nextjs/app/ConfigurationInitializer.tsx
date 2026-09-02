@@ -82,15 +82,21 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
     let selectedProvider: string | undefined;
     const revalidateProviderConfiguration = async () => {
       try {
-        const configResponse = await fetch('/api/user-config', {
+        // Provider settings contain API keys and are intentionally admin-only.
+        // Route revalidation also runs for ordinary signed-in users, so use the
+        // authenticated, redacted runtime view rather than the admin endpoint.
+        const configResponse = await fetch('/api/runtime-config', {
           cache: 'no-store',
         });
         if (!configResponse.ok) {
           await assertBackendReachable();
-          throw new Error(`user-config returned ${configResponse.status}`);
+          throw new Error(`runtime-config returned ${configResponse.status}`);
         }
 
-        const config = normalizeLLMConfig(await configResponse.json());
+        const runtime = await configResponse.json();
+        const config = normalizeLLMConfig(
+          (runtime.config || {}) as LLMConfig
+        );
         selectedProvider = config.LLM;
         dispatch(setLLMConfig(config));
 
