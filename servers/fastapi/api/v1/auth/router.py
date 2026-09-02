@@ -24,6 +24,7 @@ from api.v1.auth.users import (
 from models.sql.user import User
 from services.database import get_async_session
 from utils.get_env import is_disable_auth_enabled
+from utils.user_config import get_user_config
 from api.v1.auth.config import (
     SESSION_COOKIE_NAME,
     SESSION_TTL_SECONDS,
@@ -36,6 +37,21 @@ from api.v1.auth.presenton_oauth import PRESENTON_OAUTH_ROUTER
 API_V1_AUTH_ROUTER = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 API_V1_AUTH_ROUTER.include_router(TOKEN_ROUTER)
 API_V1_AUTH_ROUTER.include_router(PRESENTON_OAUTH_ROUTER)
+
+
+@API_V1_AUTH_ROUTER.get("/runtime-config")
+async def get_runtime_config(
+    current_user: User | None = Depends(read_user_from_cookie),
+):
+    """Return the effective provider configuration to the internal web server.
+
+    The Next.js route removes secret fields before returning this data to the
+    browser. Resolving here keeps environment-backed deployments and persisted
+    provider settings on the same code path as LLM requests.
+    """
+    if not is_disable_auth_enabled() and current_user is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return get_user_config().model_dump()
 
 
 def normalize_username(username: str) -> str:
