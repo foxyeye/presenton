@@ -382,6 +382,26 @@ const PresentationHeader = ({
       setIsExporting(false);
     }
   };
+
+  const handleArchivePptxToProject = async () => {
+    if (isStreaming) return;
+    const toastId = notify.loading("Saving to project", "Exporting the PPTX and uploading it to OPC project documents.");
+    try {
+      setIsExporting(true);
+      const safeFileName = buildSafeExportFileName(presentationData?.title, "pptx");
+      const response = await fetch("/api/archive-project-presentation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: presentation_id, title: safeFileName.replace(/\.pptx$/i, "") }),
+      });
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || "Unable to save presentation to project");
+      notify.success("Saved to project", "The PPTX is now available in the project's documents.", { id: toastId });
+    } catch (error) {
+      notify.error("Project save failed", error instanceof Error ? error.message : "Unable to save presentation to project.", { id: toastId });
+    } finally {
+      setIsExporting(false);
+    }
+  };
   const handleReGenerate = () => {
     setIsRegenerateConfirmOpen(false);
     dispatch(clearPresentationData());
@@ -479,6 +499,16 @@ const PresentationHeader = ({
         >
           PPTX
           <ArrowUpRight className="w-3.5 h-3.5" />
+        </Button>
+        <Button
+          onClick={() => {
+            handleArchivePptxToProject();
+            setOpen(false);
+          }}
+          variant="ghost"
+          className={`w-full flex px-0 justify-start text-xs text-black hover:bg-transparent ${mobile ? "bg-white py-6" : ""}`}
+        >
+          Save PPTX to OPC project
         </Button>
       </div>
     </div>

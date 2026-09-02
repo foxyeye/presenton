@@ -2,6 +2,7 @@ import hashlib
 import ipaddress
 import os
 import secrets
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 import jwt
@@ -26,10 +27,12 @@ from services.database import get_async_session
 from utils.get_env import is_disable_auth_enabled
 from utils.user_config import get_user_config
 from api.v1.auth.config import (
-    SESSION_COOKIE_NAME,
+SESSION_COOKIE_NAME,
     SESSION_TTL_SECONDS,
     persist_admin_credentials,
 )
+
+OPC_ARCHIVE_CONTEXT_COOKIE_NAME = "presenton_opc_archive_context"
 from api.v1.auth.token import TOKEN_ROUTER
 from api.v1.auth.presenton_oauth import PRESENTON_OAUTH_ROUTER
 
@@ -159,6 +162,30 @@ async def exchange_opc_entry_token(
     token = await get_jwt_strategy().write_token(user)
     response = RedirectResponse(url="/", status_code=303) if form_submission else JSONResponse({"authenticated": True, **serialize_user(user)})
     _set_login_cookie(response, token, request)
+    # Keep the OPC project context server-readable for the export flow.  The
+    # original entry token lives only 60 seconds; this is a separately scoped
+    # token and is never exposed to browser JavaScript.
+    archive_claims = {
+        "sub": subject,
+        "email": claims.get("email", ""),
+        "name": claims.get("name", ""),
+        "project_id": project_id,
+        "presentation_id": presentation_id,
+        "role": role,
+        "aud": "opc-presenton-archive",
+        "iat": int(time.time()),
+        "exp": int(time.time()) + SESSION_TTL_SECONDS,
+    }
+    archive_token = jwt.encode(archive_claims, secret, algorithm="HS256")
+    response.set_cookie(
+        OPC_ARCHIVE_CONTEXT_COOKIE_NAME,
+        archive_token,
+        max_age=SESSION_TTL_SECONDS,
+        httponly=True,
+        secure=_secure_request(request),
+        samesite="lax",
+        path="/",
+    )
     return response
 
 
