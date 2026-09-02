@@ -154,8 +154,12 @@ async function runBundledPresentationExportLocked(params: {
   const entrypoint = await resolveExportEntrypoint(exportRoot);
   const appRoot = getPresentonAppRoot();
 
+  // Browser users need the public URL, while the bundled Chromium process
+  // runs inside this container and must be able to reach a local endpoint.
   const nextjsUrl =
-    process.env.NEXT_PUBLIC_URL?.trim() || "http://127.0.0.1";
+    process.env.PRESENTON_EXPORT_URL?.trim() ||
+    process.env.NEXT_PUBLIC_URL?.trim() ||
+    "http://127.0.0.1";
   const q = new URLSearchParams({ id: presentationId, format });
   const sessionToken = extractSessionTokenFromCookieHeader(cookieHeader);
   if (sessionToken) {

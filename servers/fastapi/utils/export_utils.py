@@ -15,8 +15,13 @@ from utils.runtime_limits import log_memory
 LOGGER = logging.getLogger(__name__)
 
 
-def _get_next_public_url() -> str:
-    return (os.getenv("NEXT_PUBLIC_URL") or "").strip() or "http://127.0.0.1"
+def _get_next_export_url() -> str:
+    """Return the URL Chromium should use from inside the Presenton container."""
+    return (
+        (os.getenv("PRESENTON_EXPORT_URL") or "").strip()
+        or (os.getenv("NEXT_PUBLIC_URL") or "").strip()
+        or "http://127.0.0.1"
+    )
 
 
 def _get_next_public_fastapi_url() -> str | None:
@@ -31,7 +36,7 @@ def _build_presentation_export_url(
     fastapi_url = _get_next_public_fastapi_url()
     if fastapi_url:
         params["fastapiUrl"] = fastapi_url
-    export_url = f"{_get_next_public_url().rstrip('/')}/pdf-maker?{urlencode(params)}"
+    export_url = f"{_get_next_export_url().rstrip('/')}/pdf-maker?{urlencode(params)}"
     if cookie_header:
         export_url = f"{export_url}#{urlencode({'exportCookie': cookie_header})}"
     return (
